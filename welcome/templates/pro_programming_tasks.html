@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Programming Tasks</title>
+    <link rel="stylesheet" href="../static/style.css">
+</head>
+<body>
+    <header>
+        <h1>Pro Programming Tasks</h1>
+        <p>Here are your tasks with advanced features and category details!</p>
+    </header>
+    
+    <!-- Projects List -->
+    <section class="projects-list">
+        <h2>Your Projects</h2>
+        {% if projects %}
+            <ul>
+                {% for project in projects %}
+                    <li class="project-item">
+                        <h3>{{ project.name }}</h3>
+                        <p><strong>Start Date:</strong> {{ project.start_date|date:"Y-m-d H:i" }}</p>
+                        <p><strong>End Date:</strong> {% if project.end_date %}{{ project.end_date|date:"Y-m-d H:i" }}{% else %}Ongoing{% endif %}</p>
+                        <a href="{% url 'project_detail' project.id %}" class="project-link">View Details</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No projects found. Start creating a project to manage your tasks!</p>
+        {% endif %}
+    </section>
+    
+    <!-- Tasks List -->
+    <section class="task-list">
+        <h2>Your Tasks</h2>
+        {% if tasks %}
+            <ul>
+                {% for task in tasks %}
+                    <li class="task-item {% if task.is_done %}completed{% endif %}">
+                        <div class="task-details">
+                            <h3>{{ task.task_name }}</h3>
+                            <p><strong>Due Time:</strong> {{ task.due_time }}</p>
+                            <p><strong>Category:</strong> {{ task.category }}</p>
+                            <p><strong>Status:</strong> {% if task.is_done %}Completed{% else %}Pending{% endif %}</p>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No tasks available. Add some tasks to get started!</p>
+        {% endif %}
+    </section>
+    
+    <footer>
+        <p>© 2024 Task Management App. All rights reserved.</p>
+    </footer>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        section {
+            padding: 20px;
+        }
+        .project-item {
+            background-color: #fff3cd;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .task-item {
+            background-color: white;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .task-item.completed {
+            background-color: #e0f7fa;
+        }
+        .task-details, .project-item {
+            font-size: 16px;
+        }
+        footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            position: fixed;
+            width: 100%;
+            bottom: 0;
+        }
+        .project-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .project-link:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</body>
+</html>

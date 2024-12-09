@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Details - {{ project.name }}</title>
+    <link rel="stylesheet" href="../static/style.css">
+</head>
+<body>
+    <header>
+        <h1>Project Details</h1>
+        <h2>{{ project.name }}</h2>
+        <p><strong>Created By:</strong> {{ project.created_by.username }}</p>
+        <p><strong>Start Date:</strong> {{ project.start_date|date:"Y-m-d H:i" }}</p>
+        <p><strong>End Date:</strong> {% if project.end_date %}{{ project.end_date|date:"Y-m-d H:i" }}{% else %}Ongoing{% endif %}</p>
+    </header>
+
+    <!-- Members Section -->
+    <section class="members">
+        <h3>Project Members</h3>
+        {% if members %}
+            <ul>
+                {% for member in members %}
+                    <li>{{ member.username }} ({{ member.email }})</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No members added yet.</p>
+        {% endif %}
+        <button onclick="window.location.href='{% url 'invite_team_members' project.id %}'">Add Member</button>
+    </section>
+
+    <!-- Tasks Section -->
+    <section class="tasks">
+        <h3>Tasks</h3>
+        {% if tasks %}
+            <ul>
+                {% for task in tasks %}
+                    <li class="task-item {% if task.is_done %}completed{% endif %}">
+                        <h4>{{ task.task_name }}</h4>
+                        <p><strong>Assigned To:</strong> {{ task.assigned_to.username }}</p>
+                        <p><strong>Due Time:</strong> {{ task.due_date }}</p>
+                        <p><strong>Status:</strong> {% if task.is_done %}Completed{% else %}Pending{% endif %}</p>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No tasks assigned to this project yet.</p>
+        {% endif %}
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>© 2024 Task Management App. All rights reserved.</p>
+    </footer>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        section {
+            padding: 20px;
+            flex-grow: 1; /* Ensures content area grows to take up available space */
+        }
+        .members, .tasks {
+            background-color: white;
+            margin: 10px 20px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .task-item.completed {
+            background-color: #d4edda;
+        }
+        footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 10px;
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</body>
+</html>

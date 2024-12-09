@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Team Member</title>
+    <link rel="stylesheet" href="../static/style.css">
+</head>
+<body>
+    <header>
+        <h1>Add Team Member</h1>
+    </header>
+
+    <section class="invite-form">
+        <h2>Invite a Team Member</h2>
+        <form method="POST">
+            {% csrf_token %}
+            <label for="email">Team Member's Email:</label>
+            <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                placeholder="Enter team member's email" 
+                required
+            ><br><br>
+
+            <button type="submit">Send Invitation</button>
+        </form>
+        <p><a href="{% url 'project_detail' project.id %}">Back to Project</a></p>
+    </section>
+
+    <footer>
+        <p>© 2024 Task Management App. All rights reserved.</p>
+    </footer>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        section.invite-form {
+            background-color: white;
+            margin: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            position: fixed;
+            width: 100%;
+            bottom: 0;
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</body>
+</html>

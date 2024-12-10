@@ -277,7 +277,7 @@ def invite_team_members(request, project_id):
             # Send invitation email
             send_invitation_email(request.user, email, token, request)
 
-            return render(request, 'invitation_sent.html', {'email': email})
+            return render(request, 'invitation_sent.html', {'email': email,'project':project})
 
     return render(request, 'add_team_members.html', {'project': project})
 
@@ -299,11 +299,11 @@ def send_invitation_email(team_leader, email, token, request):
 
 @login_required
 def accept_invitation(request, token):
-    invitation = get_object_or_404(Invitation, token=token, is_accepted=False)
+    invitation = get_object_or_404(Invitation, token=token, accepted=False)
 
     # Add the user to the project
     invitation.project.members.add(request.user)
-    invitation.is_accepted = True
+    invitation.accepted = True
     invitation.save()
 
     return render(request, 'invitation_accepted.html', {'project': invitation.project})

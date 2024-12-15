@@ -1,21 +1,26 @@
 from django.contrib import admin
-from .models import Task, Category, BusinessType, Project, TaskFeedback, CodeSubmission, Invitation, UserRole
+from .models import CustomUser, UnloggedUserTask, LoggedUserTask, ProUserTask, Project, TaskFeedback, Invitation
+
+# Register the CustomUser model (since it's a custom user model, we use UserAdmin for it)
 from django.contrib.auth.admin import UserAdmin
-from .models import User
+from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 
-@admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    fieldsets = UserAdmin.fieldsets + (
-        (None, {'fields': ('subscription_type', 'category')}),  # Add 'category' field here
-    )
-    # You can also modify the 'list_display' if you want the 'category' to be shown in the list view of users.
-    list_display = UserAdmin.list_display + ('subscription_type', 'category')
+    model = CustomUser
+    # The fields to be used in displaying the model.
+    # These can be modified to customize the fields that will be shown in the admin panel.
+    list_display = ('username', 'email', 'subscription_type', 'role', 'category', 'trial_start_date', 'is_staff')
+    list_filter = ('is_staff', 'subscription_type', 'role', 'category')
+    search_fields = ('username', 'email')
+    ordering = ('username',)
 
-admin.site.register(Task)
-admin.site.register(Category)
-admin.site.register(BusinessType)
+# Register the CustomUser model with the custom admin
+admin.site.register(CustomUser, CustomUserAdmin)
+
+# Register the other models
+admin.site.register(UnloggedUserTask)
+admin.site.register(LoggedUserTask)
+admin.site.register(ProUserTask)
 admin.site.register(Project)
 admin.site.register(TaskFeedback)
-admin.site.register(CodeSubmission)
 admin.site.register(Invitation)
-admin.site.register(UserRole)

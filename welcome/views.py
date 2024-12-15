@@ -1,213 +1,189 @@
-from django.shortcuts import render, redirect,get_object_or_404
-from datetime import datetime
-from .models import Task,Category,BusinessType,Project,TaskFeedback,CodeSubmission,Invitation,UserRole
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
-import json
-import uuid
-from .forms import CategoryForm,ProjectForm,InviteMembersForm,UserRegistrationForm,TaskForm
-from datetime import datetime, timedelta
+from .models import UnloggedUserTask, LoggedUserTask, ProUserTask, Project, TaskFeedback, Invitation,CustomUser
 from django.contrib.auth.decorators import login_required
-from .models import User,Project,TeamMember
+from django.shortcuts import render, redirect
+from django.contrib.auth import login, authenticate
 from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth import authenticate, login, logout
-from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from .forms import CustomUserCreationForm,ProjectForm
+from datetime import datetime, timedelta
+import uuid
 from django.urls import reverse
 from django.conf import settings
+from django.utils import timezone
+from django.http import HttpResponseForbidden
 
 
-
-
-def register(request):
+# Function to handle user registration
+def register_view(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
-        subscription_type = "free"
-       
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            return redirect('dashboard')
+    else:
+        form = CustomUserCreationForm()
+    return render(request, 'register.html', {'form': form})
 
-        # Validate form data
-        if password != confirm_password:
-            messages.error(request, 'Passwords do not match.')
-            return render(request, 'register.html')
-
-        if User.objects.filter(username=username).exists():
-            messages.error(request, 'Username already exists.')
-            return render(request, 'register.html')
-
-        if User.objects.filter(email=email).exists():
-            messages.error(request, 'Email is already registered.')
-            return render(request, 'register.html')
-
-        # Create the user
-        user = User.objects.create_user(username=username, email=email, password=password)
-        user.subscription_type = subscription_type  # Assuming a profile or extended user model
-        user.save()
-
-        # Log the user in after registration
-        login(request, user)
-        messages.success(request, 'Registration successful!')
-        return redirect('list_tasks')
-
-    return render(request, 'register.html')
-
-
+# Function to handle user login
 def login_view(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-
-        # Authenticate the user
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
-            messages.success(request, f'Welcome back, {username}!')
-            return redirect('list_tasks')
-        else:
-            messages.error(request, 'Invalid username or password.')
-
-    return render(request, 'login.html')
-
-@login_required
-def user_logout(request):
-    logout(request)
-    messages.success(request, 'You have been logged out.')
-    return redirect('login')
-
-
-@login_required
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            username = form.cleaned_data.get('username')
+            password = form.cleaned_data.get('password')
+            user = authenticate(request, username=username, password=password)
+            if user is not None:
+                login(request, user)
+                return redirect('dashboard')
+    else:
+        form = AuthenticationForm()
+    return render(request, 'login.html', {'form': form})
+# Function to create a task for unlogged users
 def create_task(request):
     if request.method == 'POST':
-        task_name = request.POST.get('title')
-        due_time_str = request.POST.get('date')
-        category_id = request.POST.get('category')
-        project_id = request.POST.get('project')
+        task_name = request.POST.get('task_name')
 
-        # Parse and assign attributes
-        due_time = datetime.strptime(due_time_str, '%Y-%m-%dT%H:%M')
-        category = get_object_or_404(Category, id=category_id)
-        project = get_object_or_404(Project, id=project_id)
+        if request.user.is_authenticated:
+            # For logged and pro users
+            if request.user.subscription_type == 'pro':
+                # Pro user task creation
+                project_id = request.POST.get('project_id')
+                project = get_object_or_404(Project, id=project_id) if project_id else None
+                file = request.FILES.get('file')
+                task = ProUserTask.objects.create(user=request.user, task_name=task_name, project=project)
+                return redirect('dashboard_view')
+            else:
+                # Logged user task creation
+                task = LoggedUserTask.objects.create(user=request.user, task_name=task_name)
+                return redirect('dashboard_view')
+        else:
+            # For unlogged user task creation
+            ip_address = get_client_ip(request)
+            task = UnloggedUserTask.objects.create(ip_address=ip_address, task_name=task_name)
+            return redirect('dashboard_view')
 
-        task = Task(
-            name=task_name,
-            due_date=due_time,
-            category=category,
-            project=project,
-            assigned_to=request.user
+    # For GET request, provide the project list for pro users
+    if request.user.is_authenticated and request.user.subscription_type == 'pro':
+        projects = Project.objects.filter(created_by=request.user)
+        return render(request, 'create_task.html', {'projects': projects})
+
+    return render(request, 'create_task.html')
+
+# Function to create a project
+@login_required
+def create_project(request):
+    if request.method == 'POST':
+        form = ProjectForm(request.POST)
+        if form.is_valid():
+            project = form.save(commit=False)
+            project.created_by = request.user  # Set the creator as the logged-in user (team leader)
+
+            # Set the start_date if it is not already provided in the form
+            if not project.start_date:
+                project.start_date = timezone.now()  # Set the current date and time as the start date
+
+            project.save()
+            return redirect('project_detail', project_id=project.id)  # Redirect to the project detail page
+    else:
+        form = ProjectForm()
+
+    return render(request, 'create_project.html', {'form': form})
+
+# Function to submit feedback for a task
+@login_required
+def submit_feedback(request, task_id):
+    task = get_object_or_404(ProUserTask, id=task_id, user=request.user)
+    if request.method == 'POST':
+        feedback_text = request.POST.get('feedback')
+        feedback = TaskFeedback.objects.create(task=task, feedback=feedback_text)
+        return render(request, 'feedback_submitted.html', {'feedback': feedback})
+    return render(request, 'submit_feedback.html', {'task': task})
+
+# Function to view invitations
+@login_required
+def view_invitations(request):
+    invitations = Invitation.objects.filter(team_leader=request.user)
+    return render(request, 'invitations.html', {'invitations': invitations})
+
+# Function to send an invitation
+@login_required
+def send_invitation(request):
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        email = request.POST.get('email')
+        project_id = request.POST.get('project_id')
+        project = get_object_or_404(Project, id=project_id, created_by=request.user)
+
+        invitation = Invitation.objects.create(
+            team_leader=request.user,
+            name=name,
+            email=email,
+            token=generate_unique_token(),
+            project=project
         )
-        task.save()  # Explicit save call
-        return redirect('list_tasks')
+        return render(request, 'invitation_sent.html', {'invitation': invitation})
 
-    categories = Category.objects.all()
     projects = Project.objects.filter(created_by=request.user)
-    return render(request, 'create_task.html', {'categories': categories, 'projects': projects})
+    return render(request, 'send_invitation.html', {'projects': projects})
 
-def list_tasks(request):
-    user = request.user  # Get the logged-in user
-    tasks = Task.objects.all()  # Adjust filtering as needed
-    categories = Category.objects.all()
+# Function to display the dashboard
+def dashboard_view(request):
+    user = request.user
+    context = {}
 
-    # Check subscription type
-    subscription_type = getattr(user, 'subscription_type', 'free')  # Default to 'free' if not set
-    if subscription_type == 'free':
-        # Free users: Keep the default simple view
-        tasks_data = [
-            {
-                "id": task.id,
-                "task_name": task.task_name,
-                "due_date": task.due_date.strftime("%H:%M"),
-                "is_done": task.is_done
-                
-            }
-            for task in tasks
-        ]
-        template = "index.html"  # Simple template for free users
-        projects = None
-    elif subscription_type == 'pro':
-        # Pro users: Add programming-specific layout
-        tasks_data = [
-            {
-                "id": task.id,
-                "task_name": task.task_name,
-                "due_date": task.due_date.strftime("%H:%M"),
-                "is_done": task.is_done,
-            }
-            for task in tasks
-        ]
-        if user.category == "programming":
-            template = "pro_programming_tasks.html"  # Advanced template for pro users
-        elif user.category == "crm":
-            template = "pro_crm_tasks.html"
-        elif user.category == "education":
-            template = "pro_education_tasks.html"
-
-        projects = Project.objects.filter(created_by=user)
+    if user.is_authenticated:
+        if user.subscription_type == 'pro':
+            context['pro_tasks'] = ProUserTask.objects.filter(user=user)
+            context['projects'] = Project.objects.filter(created_by=user)
+            return render(request, 'pro_programming_tasks.html', context)
+        else:
+            context['logged_tasks'] = LoggedUserTask.objects.filter(user=user)
+            return render(request, 'dashboard.html', context)
+    else:
+        ip_address = get_client_ip(request)
+        context['unlogged_tasks'] = UnloggedUserTask.objects.filter(ip_address=ip_address)
+        return render(request, 'dashboard.html', context)
 
 
-    return render(request, template, {
-        'tasks': tasks_data,
-        'categories': categories,
-        'projects':projects
-    })
 
 def update_task_status(request, task_id):
     if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            is_done = data.get("is_done", False)
+        task = None
+        if request.user.is_authenticated:
+            # For logged-in users
+            if request.user.subscription_type == 'pro':
+                task = ProUserTask.objects.get(id=task_id, user=request.user)
+            else:
+                task = LoggedUserTask.objects.get(id=task_id, user=request.user)
+        else:
+            # For unlogged users (using IP address to identify)
+            task = UnloggedUserTask.objects.get(id=task_id, ip_address=get_client_ip(request))
 
-            task = get_object_or_404(Task, pk=task_id)
-            task.is_done = is_done
-            task.save()  # Explicit save
-            return JsonResponse({"success": True, "task_id": task.id, "is_done": task.is_done})
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-    return JsonResponse({"error": "Invalid request method"}, status=405)
+        # Toggle the task's `is_done` field
+        task.is_done = not task.is_done
+        task.save()
 
-    
+        return JsonResponse({'status': 'success', 'is_done': task.is_done})
 
-def create_category(request):
-    if request.method == 'POST':
-        form = CategoryForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('category_list')
+    return JsonResponse({'status': 'failed'})
+
+
+# Utility function to generate a unique token for invitations
+def generate_unique_token():
+    import uuid
+    return str(uuid.uuid4())
+
+# Function to get client IP address
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
     else:
-        form = CategoryForm()
-
-    return render(request, 'create_category.html', {'form': form})
-
-
-# List Categories
-def category_list(request):
-    categories = Category.objects.all()  # Get all categories
-    return render(request, 'category_list.html', {'categories': categories})
-
-
-def tasks_by_category(request, category_id):
-    # Get the category by ID
-    category = get_object_or_404(Category, id=category_id)
-    
-    # Filter tasks by category
-    tasks = Task.objects.filter(category=category).exclude(task_name__exact="")
-    
-    tasks_data = [
-        {
-            "id": task.id,
-            "task_name": task.task_name,
-            "due_time": task.due_time.strftime("%H:%M"),
-            "is_done": task.is_done
-        }
-        for task in tasks
-    ]
-    
-    return render(request, 'tasks_by_category.html', {
-        'category': category,
-        'tasks': tasks_data
-    })
-
-
-
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
 
 def trial_middleware(get_response):
     def middleware(request):
@@ -223,35 +199,29 @@ def trial_middleware(get_response):
     return middleware
 
 
-
 @login_required
 def subscribe_pro(request):
     if request.method == 'POST':
         user = request.user
         category = request.POST.get('category')  # Get the selected category from the form
 
-        # Ensure there is a UserRole instance for the user
-        user_role, created = UserRole.objects.get_or_create(user=user)
+        # Update the user's role and business_type directly in the CustomUser model
+        user.role = 'team_leader'  # Assign the 'team_leader' role
+        user.business_type = user.subscription_type  # Set business type based on subscription type (e.g., 'pro' or 'free')
 
-        # Update the role and business_type fields
-        user_role.role = 'team_leader'  # Assign the team leader role
-        user_role.business_type = BusinessType.objects.first()  # Set the first available business type (or adjust as needed)
-        user_role.save()
-
-        # Update the user's subscription_type and category
-        user.subscription_type = 'pro'
+        # Save the updated role and business_type
         user.category = category  # Save the selected category
+        user.subscription_type = 'pro'  # Update subscription type to 'pro'
         user.save()
 
-        return redirect('list_tasks')  # Redirect to the next step after subscribing
+        return redirect('dashboard_view')  # Redirect to the next step after subscribing
 
     return render(request, 'subscribe_pro.html', {'user': request.user})
 
 
 
 from django.core.mail import send_mail
-from django.contrib import messages
-from .models import Invitation
+from django.db import IntegrityError
 
 @login_required
 def invite_team_members(request, project_id):
@@ -263,23 +233,38 @@ def invite_team_members(request, project_id):
 
     if request.method == 'POST':
         email = request.POST.get("email")
+        role = request.POST.get("role")  # Fetch the role from the POST data
 
-        if email:
-            # Create an invitation token
-            token = uuid.uuid4()
-            Invitation.objects.create(
-                email=email,
-                project=project,
-                team_leader=request.user,
-                token=token,
-            )
+        if email and role:
+            try:
+                # Check if the user already exists
+                user, created = CustomUser.objects.get_or_create(email=email, defaults={"username": email.split("@")[0]})
 
-            # Send invitation email
-            send_invitation_email(request.user, email, token, request)
+                # Update the role for the user
+                user.role = role
+                user.save()
 
-            return render(request, 'invitation_sent.html', {'email': email,'project':project})
+                # Create an invitation token
+                token = uuid.uuid4()
+                Invitation.objects.create(
+                    email=email,
+                    project=project,
+                    team_leader=request.user,
+                    token=token,
+                )
+
+                # Send invitation email
+                send_invitation_email(request.user, email, token, request)
+
+                return render(request, 'invitation_sent.html', {'email': email, 'project': project})
+
+            except IntegrityError:
+                # Handle the case where the email already has an invitation
+                error_message = "This email has already been invited to the project."
+                return render(request, 'add_team_members.html', {'project': project, 'error_message': error_message})
 
     return render(request, 'add_team_members.html', {'project': project})
+
 
 
 def send_invitation_email(team_leader, email, token, request):
@@ -296,13 +281,18 @@ def send_invitation_email(team_leader, email, token, request):
 
 
 
-
 @login_required
 def accept_invitation(request, token):
+    # Retrieve the invitation
     invitation = get_object_or_404(Invitation, token=token, accepted=False)
 
-    # Add the user to the project
-    invitation.project.members.add(request.user)
+
+    project = invitation.project
+    request.user.role == 'Product Owner'
+    # Add the logged-in user to the project's members
+    project.members.add(request.user)
+    
+    # Mark the invitation as accepted
     invitation.accepted = True
     invitation.save()
 
@@ -310,59 +300,193 @@ def accept_invitation(request, token):
 
 
 
+@login_required
+def upload_task_file(request, task_id):
+    task = get_object_or_404(ProUserTask, id=task_id)
+    if request.method == 'POST' and request.FILES.get('file'):
+        uploaded_file = request.FILES['file']
+        task.uploaded_file = uploaded_file  # Assuming Task model has a file field
+        task.save()
+        return JsonResponse({'message': 'File uploaded successfully'})
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+from django.http import HttpResponse, Http404
+import os
+
+
+def download_file(request, task_id):
+    # Get the task instance
+    task = get_object_or_404(ProUserTask, id=task_id)
+    
+    # Check if the task has an uploaded file
+    if not task.uploaded_file:
+        raise Http404("No file found for this task.")
+
+    # Construct the full file path
+    file_path = os.path.join(settings.MEDIA_ROOT, task.uploaded_file.name)
+
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        raise Http404("File not found on the server.")
+
+    # Serve the file as a response
+    with open(file_path, 'rb') as file:
+        response = HttpResponse(file.read(), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+        return response
+    
+
+import zipfile
+from django.conf import settings
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+
+def export_project_files(request, project_id):
+    # Fetch the project and associated tasks
+    project = get_object_or_404(Project, id=project_id)
+    tasks = project.tasks.all()
+
+    # Define a temporary zip file location
+    zip_filename = f"{project.name}_files.zip"
+    temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    zip_path = os.path.join(temp_dir, zip_filename)
+
+    # Create the zip file
+    with zipfile.ZipFile(zip_path, 'w') as zip_file:
+        for task in tasks:
+            if task.uploaded_file and os.path.exists(task.uploaded_file.path):
+                file_path = task.uploaded_file.path
+                file_name = os.path.basename(file_path)
+                # Add the file under a folder named after the task
+                zip_file.write(file_path, arcname=f"{task.task_name}/{file_name}")
+
+    # Serve the zip file as a downloadable response
+    with open(zip_path, 'rb') as zip_file:
+        response = HttpResponse(zip_file.read(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+
+    # Clean up the temporary file
+    os.remove(zip_path)
+
+    return response
+
+
+
+def view_project_tasks(request, project_id):
+    project = get_object_or_404(Project, id=project_id)
+
+    # Ensure the user is the Product Owner of the project
+
+    # Fetch all tasks related to this project
+    tasks = project.tasks.all()
+
+    return render(request, 'project_tasks.html', {
+        'project': project,
+        'tasks': tasks,
+    })
+
 
 @login_required
-def create_project(request):
+def reassign_task(request, task_id):
+    # Fetch the task
+    task = get_object_or_404(ProUserTask, id=task_id)
+
+    # Ensure the user has permission to reassign the task
+    if request.user != task.project.created_by and request.user.role != 'team_leader':
+        return HttpResponseForbidden("You do not have permission to reassign this task.")
+    
     if request.method == 'POST':
-        form = ProjectForm(request.POST)
-        if form.is_valid():
-            project = form.save(commit=False)
-            project.created_by = request.user  # Set the creator as the logged-in user (team leader)
-            project.save()
-            return redirect('project_detail', project_id=project.id)  # Redirect to the project detail page
-    else:
-        form = ProjectForm()
+        # Get the new assignee's ID from the form
+        new_assignee_id = request.POST.get('assigned_to')
+        new_assignee = get_object_or_404(CustomUser, id=new_assignee_id)
 
-    return render(request, 'create_project.html', {'form': form})
+        # Validate that the new assignee is a member of the project
+        if new_assignee not in task.project.members.all():
+            return HttpResponseForbidden("The selected user is not a member of this project.")
 
+        # Reassign the task
+        task.assigned_to = new_assignee
+        task.save()
 
-@login_required
-def assign_task(request, project_id):
-    project = Project.objects.get(id=project_id)
+        # Redirect to the project detail page
+        return redirect('project_detail', project_id=task.project.id)
 
-    if request.user != project.created_by:
-        return redirect('project_detail', project_id=project.id)  # Only the creator can assign tasks
-
-    if request.method == 'POST':
-        form = TaskForm(request.POST)
-        if form.is_valid():
-            task = form.save(commit=False)
-            task.project = project  # Associate the task with the current project
-            task.save()
-            return redirect('project_detail', project_id=project.id)
-    else:
-        form = TaskForm()
-
-    return render(request, 'assign_task.html', {'form': form, 'project': project})
+    # Fetch the project members for the dropdown
+    project_members = task.project.members.all()
+    return render(request, 'reassign_task.html', {
+        'task': task,
+        'project_members': project_members,
+    })
 
 
 @login_required
 def project_detail(request, project_id):
-    # Fetch the project by ID
+    # Fetch the project or return a 404 if it doesn't exist
     project = get_object_or_404(Project, id=project_id)
 
-    # Ensure the logged-in user is authorized to view the project
-    if request.user != project.created_by:
-        return render(request, '403.html')  # Unauthorized access page
+    # Ensure the user is either the project creator or a member of the project
+    if request.user != project.created_by and request.user not in project.members.all():
+        return HttpResponseForbidden("You do not have permission to view this project.")
 
-    # Fetch related tasks and members
-    tasks = Task.objects.filter(project=project)
-    members = project.members.all()
+    # Fetch tasks related to this project
+    tasks = project.tasks.all()
 
-    # Render the project detail template
+    # Debugging output to confirm task query results
+    print(f"Tasks for project {project_id}: {tasks}")
+
+    # Render the project details page
     return render(request, 'project_detail.html', {
         'project': project,
         'tasks': tasks,
-        'members': members
+        'members': project.members.all()
     })
 
+@login_required
+def task_detail(request, task_id):
+    task = get_object_or_404(ProUserTask, id=task_id)
+    project = task.project
+
+    # Ensure that the current user is the project leader
+    if project.created_by != request.user:
+        return HttpResponseForbidden("You are not authorized to manage tasks for this project.")
+
+    # Handle feedback submission (approve or refuse)
+    if request.method == "POST":
+        action = request.POST.get('action')
+        feedback_text = request.POST.get('feedback')
+
+        if action == "approve":
+            # Approve the task and mark it as done
+            task_feedback, created = TaskFeedback.objects.get_or_create(task=task)
+            task_feedback.approved = True
+            task_feedback.feedback = ""
+            task_feedback.save()
+
+            # Mark the task as done
+            task.mark_as_done()
+
+        elif action == "refuse":
+            # Refuse the task and save feedback
+            task_feedback, created = TaskFeedback.objects.get_or_create(task=task)
+            task_feedback.approved = False
+            task_feedback.feedback = feedback_text
+            task_feedback.save()
+
+            # Task remains not done
+            task.is_done = False
+            task.save()
+
+            # Delete the uploaded file if it exists
+            if task.uploaded_file:
+                task.uploaded_file.delete()
+
+        return redirect('project_detail', project_id=project.id)
+
+    # Get the current feedback for the task (if any)
+    feedback = TaskFeedback.objects.filter(task=task).first()
+
+    return render(request, 'task_detail.html', {
+        'task': task,
+        'feedback': feedback
+    })

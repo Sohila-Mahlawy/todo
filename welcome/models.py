@@ -1,92 +1,109 @@
+from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.db import models
-from django.contrib.auth.models import User
-from django.utils.timezone import now
-import uuid
-from django.contrib.auth.models import AbstractUser
 
-class User(AbstractUser):
-    # Add custom fields
+class CustomUser(AbstractUser):
     subscription_type = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=[('free', 'Free'), ('pro', 'Pro')],
         default='free'
     )
-
+    ROLE_CHOICES = [
+        ('team_leader', 'Team Leader'),
+        ('product_owner', 'Product Owner'),
+        ('programmer', 'Programmer'),
+    ]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, null=True)
+    trial_start_date = models.DateField(null=True, blank=True)
     category = models.CharField(
         max_length=20,
         choices=[('programming', 'Programming'), ('education', 'Education'), ('crm', 'CRM')],
-        null = True
+        null=True
+    )
+    # Add related_name to avoid conflicts
+    groups = models.ManyToManyField(
+        Group,
+        related_name="custom_user_groups",
+        blank=True
+    )
+    user_permissions = models.ManyToManyField(
+        Permission,
+        related_name="custom_user_permissions",
+        blank=True
     )
 
-
-class BusinessType(models.Model):
-    name = models.CharField(max_length=100)
-
-class UserRole(models.Model):
-    ROLE_CHOICES = [('team_leader', 'Team Leader'), ('product_owner', 'Product Owner'), ('programmer', 'Programmer')]
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    role = models.CharField(max_length=50, choices=ROLE_CHOICES)
-    business_type = models.ForeignKey(BusinessType, on_delete=models.SET_NULL, null=True)
-    trial_start_date = models.DateTimeField(auto_now_add=True)
-
-class Project(models.Model):
-    name = models.CharField(max_length=255)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_projects')
-    start_date = models.DateTimeField(auto_now_add=True)
-    end_date = models.DateTimeField(null=True, blank=True)
-    members = models.ManyToManyField(User, related_name='projects', blank=True)
-
-
-    def __str__(self):
-        return self.name
-
-
-class TeamMember(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='team_members')
-    is_invited = models.BooleanField(default=True)
-
-    def __str__(self):
-        return f'{self.user.username} - {self.project.name}'
-
-    
-class Category(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-
-class Task(models.Model):
+# Model for unlogged user tasks
+class UnloggedUserTask(models.Model):
+    ip_address = models.GenericIPAddressField()
     task_name = models.CharField(max_length=255)
-    description = models.TextField()
-    due_date = models.DateTimeField(null=True, blank=True)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
-    assigned_to = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tasks')
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_done = models.BooleanField(default=False)  # Add the is_done field
+
+    def __str__(self):
+        return self.task_name
+
+# Model for logged user tasks
+class LoggedUserTask(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    task_name = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_done = models.BooleanField(default=False)  # Add the is_done field
+
+    def __str__(self):
+        return self.task_name
+
+class ProUserTask(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)  # Task creator
+    task_name = models.CharField(max_length=255)
+    project = models.ForeignKey(
+        'Project', on_delete=models.CASCADE, null=True, blank=True, related_name='tasks'
+    )  # Related name for reverse querying tasks by project
+    assigned_to = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks'
+    )  # User to whom the task is assigned
+    uploaded_file = models.FileField(upload_to='task_files/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     is_done = models.BooleanField(default=False)
 
     def __str__(self):
         return self.task_name
 
+
+
+class Project(models.Model):
+    name = models.CharField(max_length=255)
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name='projects'
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    members = models.ManyToManyField(CustomUser, related_name='project_members')
+
+    def __str__(self):
+        return f"Project by {self.created_by.username}"
+
+    # Optional utility method to retrieve all tasks
+    def get_tasks(self):
+        return self.tasks.all()
+
+
+# Model for task feedback
 class TaskFeedback(models.Model):
-    task = models.OneToOneField(Task, on_delete=models.CASCADE)
+    task = models.ForeignKey(ProUserTask, on_delete=models.CASCADE, related_name='feedback')
     feedback = models.TextField()
     approved = models.BooleanField(default=False)
 
-class CodeSubmission(models.Model):
-    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='submissions')
-    code_file = models.FileField(upload_to='submissions/')
-    submitted_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    submitted_at = models.DateTimeField(auto_now_add=True)
-    approved = models.BooleanField(null=True)
+    def __str__(self):
+        return f"Feedback for {self.task.task_name}"
 
-
-
+# Model for invitations
 class Invitation(models.Model):
-    team_leader = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invitations')
-    name = models.CharField(max_length=100)
-    email = models.EmailField(unique=True)
-    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    created_at = models.DateTimeField(default=now)
+    team_leader = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='sent_invitations')
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     accepted = models.BooleanField(default=False)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True)  # Ensure project is linked to the Project model
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='invitations')
 
-    def is_valid(self):
-        # Example of adding an expiration time (optional)
-        return not self.accepted
+    def __str__(self):
+        return f"Invitation to {self.email} for {self.project}"

@@ -1,32 +1,41 @@
-
-
 from django.urls import path
 from . import views
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     # Task-related URLs
-    path('', views.list_tasks, name='list_tasks'),
     path('create-task/', views.create_task, name='create_task'),
+
+
+    # Project-related URLs
+    path('create-project/', views.create_project, name='create_project'),
     path('update_task_status/<int:task_id>/', views.update_task_status, name='update_task_status'),
-    path('tasks/category/<int:category_id>/', views.tasks_by_category, name='tasks_by_category'),
 
+    # Feedback-related URLs
+    path('submit-feedback/<int:task_id>/', views.submit_feedback, name='submit_feedback'),
 
-    path('register/', views.register, name='register'),
-    path('login/', views.login_view, name='login'),
-    path('logout/', views.user_logout, name='logout'),
+    # Invitation-related URLs
+    path('view-invitations/', views.view_invitations, name='view_invitations'),
+    path('send-invitation/', views.send_invitation, name='send_invitation'),
 
-    path('create_project/', views.create_project, name='create_project'),
+    # Dashboard URL
+    path('', views.dashboard_view, name='dashboard'),
+
     path('project/<int:project_id>/invite/', views.invite_team_members, name='invite_team_members'),
     path('invitation/<uuid:token>/accept/', views.accept_invitation, name='accept_invitation'),
-    path('project/<int:project_id>/assign_task/', views.assign_task, name='assign_task'),
-    path('project/<int:project_id>/', views.project_detail, name='project_detail'),
-
-    # Category-related URLs
-    path('create-category/', views.create_category, name='create_category'),
-    path('category-list/', views.category_list, name='category_list'),
-
-    # Subscription-related URLs
     path('subscribe/pro/', views.subscribe_pro, name='subscribe_pro'),
-    
-    # Team Management URLs
-]
+    path('upload_task_file/<int:task_id>/', views.upload_task_file, name='upload_task_file'),
+    path('download-task-file/<int:task_id>/', views.download_file, name='download_task_file'),
+    path('export_project_files/<int:project_id>/', views.export_project_files, name='export_project_files'),
+
+    path('project/<int:project_id>/tasks/', views.view_project_tasks, name='view_project_tasks'),
+    path('project/<int:project_id>/', views.project_detail, name='project_detail'),
+    path('task/<int:task_id>/', views.task_detail, name='task_detail'),
+
+    path('task/<int:task_id>/reassign/', views.reassign_task, name='reassign_task'),
+
+    # Authentication URLs
+    path('register/', views.register_view, name='register'),
+    path('login/', views.login_view, name='login'),
+] +static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

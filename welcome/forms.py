@@ -1,40 +1,23 @@
 from django import forms
-from .models import Category,Project,Task
-
-class CategoryForm(forms.ModelForm):
-    class Meta:
-        model = Category
-        fields = ['name']
-
-
 from django.contrib.auth.forms import UserCreationForm
-from .models import User
+from .models import CustomUser,Project
 
-class UserRegistrationForm(UserCreationForm):
+class CustomUserCreationForm(UserCreationForm):
     class Meta:
-        model = User
-        fields = ['username', 'email', 'password1', 'password2', 'subscription_type']
+        model = CustomUser
+        fields = ['username', 'email', 'password1', 'password2']
 
+    def __init__(self, *args, **kwargs):
+        super(CustomUserCreationForm, self).__init__(*args, **kwargs)
+        for fieldname in ['username', 'email', 'password1', 'password2']:
+            self.fields[fieldname].help_text = None
+        self.fields['email'].required = True
 
 
 class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
-        fields = ['name', 'end_date']  # Add other fields as needed
-        widgets = {
-            'end_date': forms.DateInput(attrs={'type': 'date'})  # Ensure it appears as a date picker
-        }
+        fields = ['name','start_date', 'end_date']  # Include 'start_date' if it's not already
 
-class InviteMembersForm(forms.Form):
-    email = forms.EmailField()
-
-
-
-
-class TaskForm(forms.ModelForm):
-    class Meta:
-        model = Task
-        fields = ['task_name', 'description', 'due_date', 'assigned_to']  # Add other fields as needed
-    due_date = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'date'})  # This will render the field as a date picker
-    )
+    # Optionally, you can set default values or widgets for 'start_date'
+    start_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}), required=True)

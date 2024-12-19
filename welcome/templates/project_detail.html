@@ -1,87 +1,189 @@
+﻿{% load static %}
 
 <!DOCTYPE html>
-{% load static %}
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="UTF-8">
-  <title>Task Management Dashboard UI</title>
-  <link rel="stylesheet" href="{% static 'style.css' %}">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Detail - Admin Dashboard</title>
+    <!-- BOOTSTRAP STYLES -->
+    <link href="{% static 'bootstrap.css' %}" rel="stylesheet" />
+    <!-- FONTAWESOME STYLES -->
+    <link href="{% static 'font-awesome.css' %}" rel="stylesheet" />
+    <!-- CUSTOM STYLES -->
+    <link href="{% static 'custom.css' %}" rel="stylesheet" />
+    <!-- GOOGLE FONTS -->
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet" type="text/css" />
 </head>
 <body>
-<!-- partial:index.partial.html -->
-<link href="https://fonts.googleapis.com/css?family=DM+Sans:400,500,700&display=swap" rel="stylesheet">
-<div class="task-manager">
-  <div class="left-bar">
-    <div class="upper-part">
-      <div class="actions">
-        <div class="circle"></div>
-        <div class="circle-2"></div>
-      </div>
-    </div>
-    <div class="left-content">
-
-    </div>
-  </div>
-  
-  <div class="page-content">
-    <div class="header">
-      {{project.name}} Project Detail
-      <p class="pro-subscription-btn">Your Are Pro !</p>
-    </div>
-
-    <!-- Projects Section -->
-    <div class="projects-section">
-      <div class="section-header">
-        <h3>Project Members</h3>
-        <button class="create-task-btn" onclick="window.location.href='{% url 'invite_team_members' project.id %}'">Add Member</button>
-      </div>
-      {% if members %}
-        <li class="members">
-          {% for member in members %}
-          <li>{{ member.username }} ({{ member.email }}) - {{ member.role }}</li>
-          {% endfor %}
-        </li>
-      {% else %}
-        <p>No members added yet.</p>
-      {% endif %}
-    </div>
-
-    <!-- Tasks Section -->
-    <div class="tasks-section">
-      <div class="section-header">
-        <h2>Today’s Tasks</h2>
-        <a href="/create-task" class="create-task-btn">+ Create Task</a>
-      </div>
-      <div class="tasks-wrapper">
-        {% if tasks %}
-        <ul class="tasks">
-          {% for task in tasks %}
-          <li class="task-item {% if task.is_done %}completed{% endif %}">
-            <h4>{{ task.task_name }}</h4>
-            <p><strong>Assigned To:</strong> {{ task.assigned_to.username }}
-              <button onclick="document.getElementById('reassign-task-{{ task.id }}').style.display='block'">Reassign</button>
-            </p>
-            <p><strong>Due Date:</strong> {{ task.due_date }}</p>
-            <p><strong>Status:</strong> {% if task.is_done %}Completed{% else %}Pending{% endif %}</p>
-            <!-- Reassign Task Form -->
-            <div id="reassign-task-{{ task.id }}" class="reassign-form" style="display:none;">
-              <form method="post" action="{% url 'reassign_task' task.id %}">
-                {% csrf_token %}
-                <label for="assigned_to">Reassign To:</label>
-                <select id="assigned_to" name="assigned_to" required>
-                  {% for member in members %}
-                  <option value="{{ member.id }}" {% if member == task.assigned_to %}selected{% endif %}>{{ member.username }}</option>
-                  {% endfor %}
-                </select>
-                <button type="submit">Reassign</button>
-                <button type="button" onclick="document.getElementById('reassign-task-{{ task.id }}').style.display='none'">Cancel</button>
-              </form>
+    <div id="wrapper">
+        <!-- Navigation Bar -->
+        <nav class="navbar navbar-default navbar-cls-top" role="navigation" style="margin-bottom: 0">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".sidebar-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="index.html">Binary admin</a>
             </div>
-            {% if task.uploaded_file %}
-            <p><strong>Uploaded File:</strong> {{ task.uploaded_file.name }}</p>
-            <a href="{% url 'download_task_file' task.id %}" target="_blank">Download File</a>
-            {% endif %}
-            {% if task.is_done %}
+            <div style="color: white; padding: 15px 50px 5px 50px; float: right; font-size: 16px;">
+                Last access : 30 May 2014 &nbsp;
+                <a href="#" class="btn btn-danger square-btn-adjust">Logout</a>
+            </div>
+        </nav>
+        
+        <!-- Sidebar Navigation -->
+        <nav class="navbar-default navbar-side" role="navigation">
+            <div class="sidebar-collapse">
+                <ul class="nav" id="main-menu">
+                    <li class="text-center">
+                        <img src="{% static 'img/find_user.png' %}" class="user-image img-responsive" />
+                    </li>
+                    <li>
+<a href="{% url 'dashboard' %}"><i class="fa fa-dashboard fa-3x"></i> Dashboard</a>
+                    </li>
+                    <li>
+                        <a href="ui.html"><i class="fa fa-desktop fa-3x"></i> UI Elements</a>
+                    </li>
+                    <li>
+                        <a href="tab-panel.html"><i class="fa fa-qrcode fa-3x"></i> Tabs & Panels</a>
+                    </li>
+                    <li>
+                        <a href="chart.html"><i class="fa fa-bar-chart-o fa-3x"></i> Morris Charts</a>
+                    </li>
+                    <li>
+                        <a href="table.html"><i class="fa fa-table fa-3x"></i> Table Examples</a>
+                    </li>
+                    <li>
+                        <a href="form.html"><i class="fa fa-edit fa-3x"></i> Forms</a>
+                    </li>
+                    <li>
+                        <a href="#"><i class="fa fa-sitemap fa-3x"></i> Multi-Level Dropdown<span class="fa arrow"></span></a>
+                        <ul class="nav nav-second-level">
+                            <li>
+                                <a href="#">Second Level Link</a>
+                            </li>
+                            <li>
+                                <a href="#">Second Level Link</a>
+                            </li>
+                            <li>
+                                <a href="#">Second Level Link<span class="fa arrow"></span></a>
+                                <ul class="nav nav-third-level">
+                                    <li>
+                                        <a href="#">Third Level Link</a>
+                                    </li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a class="active-menu" href="blank.html"><i class="fa fa-square-o fa-3x"></i> Blank Page</a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Page Content -->
+        <div id="page-wrapper">
+            <div id="page-inner">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h2 class="page-title">Project Detail</h2>
+                            <h5 class="welcome-message">Welcome {{ user.username }}, Love to see you back.</h5>
+                        </div>
+                    </div>
+                    <hr />
+
+                    <!-- Task Manager Section -->
+                    <div class="task-manager row">
+                        <div class="col-md-6">
+                            <div class="task-left">
+                                <div class="task-header">
+                                    <h3>{{ project.name }} - Project Detail</h3>
+                                    <p class="pro-subscription-btn">You Are Pro!</p>
+                                </div>
+
+                                <!-- Project Members Section -->
+                                <div class="members-section">
+                                    <div class="section-header">
+                                        <h4>Project Members</h4>
+                                        <button class="btn btn-primary" onclick="window.location.href='{% url 'invite_team_members' project.id %}'">Add Member</button>
+                                    </div>
+                                    {% if members %}
+                                        <ul class="members-list">
+                                            {% for member in members %}
+                                            <li>{{ member.username }} ({{ member.email }}) - {{ member.role }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        <p>No members added yet.</p>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Task Management Section -->
+                                <div class="tasks-section">
+                                    <div class="section-header">
+                                        <h4>Today’s Tasks</h4>
+                                        <a href="/create-task" class="btn btn-success">+ Create Task</a>
+                                    </div>
+                                    <div class="tasks-wrapper">
+                                        {% if tasks %}
+                                            <ul class="task-list">
+                                                {% for task in tasks %}
+                                                <li class="task-item {% if task.is_done %}completed{% endif %}">
+                                                    <h5>{{ task.task_name }}</h5>
+                                                    <p><strong>Assigned To:</strong> {{ task.assigned_to.username }}</p>
+                                                    <p><strong>Status:</strong> {% if task.is_done %}Completed{% else %}Pending{% endif %}</p>
+
+                                                    <button class="btn btn-warning" onclick="document.getElementById('reassign-task-{{ task.id }}').style.display='block'">Reassign</button>
+
+                                                    <!-- Reassign Task Modal -->
+                                                    <div id="reassign-task-{{ task.id }}" class="reassign-form" style="display:none;">
+                                                        <form method="post" action="{% url 'reassign_task' task.id %}">
+                                                            {% csrf_token %}
+                                                            <label for="assigned_to">Reassign To:</label>
+                                                            <select id="assigned_to" name="assigned_to" required>
+                                                                {% for member in members %}
+                                                                <option value="{{ member.id }}" {% if member == task.assigned_to %}selected{% endif %}>{{ member.username }}</option>
+                                                                {% endfor %}
+                                                            </select>
+                                                            <button type="submit" class="btn btn-primary">Reassign</button>
+                                                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('reassign-task-{{ task.id }}').style.display='none'">Cancel</button>
+                                                        </form>
+                                                    </div>
+
+                                                    {% if task.uploaded_file %}
+                                                        <p><strong>Uploaded File:</strong> {{ task.uploaded_file.name }}</p>
+                                                        <a href="{% url 'download_task_file' task.id %}" target="_blank" class="btn btn-info">Download File</a>
+                                                    {% endif %}
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <p>No tasks available.</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar for Additional Content -->
+                        <div class="col-md-6">
+                            <div class="task-right">
+                                <div class="actions">
+                                    <div class="circle"></div>
+                                    <div class="circle-2"></div>
+                                </div>
+                                <!-- Add more content for the right side here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if task.is_done %}
             <!-- Task Feedback Section -->
             <div class="task-feedback">
               <h5>Provide Feedback</h5>
@@ -98,188 +200,95 @@
               </form>
             </div>
             {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <p>No tasks assigned to this project yet.</p>
-        {% endif %}
-      </div>
-      
+            </div>
+        </div>
     </div>
-  </div>
-</div>
 
-<style>
-  .create-task-btn {
-    float: right;
-    background-color: #007bff;
-    color: #fff;
-    text-decoration: none;
-    padding: 10px 15px;
-    border-radius: 5px;
-    font-size: 14px;
-  }
-  .create-task-btn:hover {
-    background-color: #0056b3;
-  }
-
-  .pro-subscription-btn {
-    float: right;
-    margin-right: 15px;
-    background-color: #28a745;
-    color: #fff;
-    text-decoration: none;
-    padding: 10px 15px;
-    border-radius: 5px;
-    font-size: 14px;
-  }
-  .pro-subscription-btn:hover {
-    background-color: #218838;
-  }
-
-  .header {
-    font-size: 24px;
-    font-weight: bold;
-    margin-bottom: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .projects-section {
-    margin-bottom: 40px;
-  }
-
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-
-  .projects-wrapper {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-  }
-
-  .project {
-    background: #f9f9f9;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-
-  .project h3 {
-    margin-top: 0;
-  }
-
-  .project-meta {
-    margin-top: 10px;
-    font-size: 14px;
-    color: #555;
-  }
-
-  .view-details-btn {
-    display: inline-block;
-    margin-top: 15px;
-    padding: 8px 12px;
-    background-color: #007bff;
-    color: #fff;
-    text-decoration: none;
-    border-radius: 5px;
-  }
-
-  .view-details-btn:hover {
-    background-color: #0056b3;
-  }
-
-
-
-</style>
-
-<script>
-  function handleTaskToggle(checkbox) {
-    const taskId = checkbox.dataset.taskId;
-    const isDone = checkbox.checked;
-
-    // Update task status
-    fetch(`/update_task_status/${taskId}/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": getCookie("csrftoken"),
-      },
-      body: JSON.stringify({ is_done: isDone }),
-    })
-      .then((response) => {
-        if (response.ok) {
-          return response.json();
-        } else {
-          throw new Error("Failed to update task status.");
+    <!-- JavaScript Files -->
+    <script src="{% static 'js/jquery-1.10.2.js' %}"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script>
+    
+    <script src="{% static 'js/jquery.metisMenu.js' %}"></script>
+    <script src="{% static 'js/custom.js' %}"></script>
+    <script>
+        function handleTaskToggle(checkbox) {
+          const taskId = checkbox.dataset.taskId;
+          const isDone = checkbox.checked;
+      
+          // Update task status
+          fetch(`/update_task_status/${taskId}/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ is_done: isDone }),
+          })
+            .then((response) => {
+              if (response.ok) {
+                return response.json();
+              } else {
+                throw new Error("Failed to update task status.");
+              }
+            })
+            .then((data) => {
+              console.log("Task status updated:", data);
+              // Show or hide the file upload section
+              const fileUploadSection = document.getElementById(`file-upload-${taskId}`);
+              if (isDone) {
+                fileUploadSection.style.display = "block"; // Show file upload
+              } else {
+                fileUploadSection.style.display = "none"; // Hide file upload
+              }
+            })
+            .catch((error) => {
+              console.error("Error updating task status:", error);
+              checkbox.checked = !isDone; // Revert checkbox on error
+            });
         }
-      })
-      .then((data) => {
-        console.log("Task status updated:", data);
-        // Show or hide the file upload section
-        const fileUploadSection = document.getElementById(`file-upload-${taskId}`);
-        if (isDone) {
-          fileUploadSection.style.display = "block"; // Show file upload
-        } else {
-          fileUploadSection.style.display = "none"; // Hide file upload
+      
+        function submitUpload(taskId) {
+          const form = document.getElementById(`upload-form-${taskId}`);
+          const formData = new FormData(form);
+      
+          fetch(`/upload_task_file/${taskId}/`, {
+            method: "POST",
+            body: formData,
+            headers: {
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+          })
+            .then((response) => {
+              if (response.ok) {
+                return response.json();
+              } else {
+                throw new Error("Failed to upload file.");
+              }
+            })
+            .then((data) => {
+              console.log("File uploaded successfully:", data);
+              alert("File uploaded successfully!");
+            })
+            .catch((error) => {
+              console.error("Error uploading file:", error);
+            });
         }
-      })
-      .catch((error) => {
-        console.error("Error updating task status:", error);
-        checkbox.checked = !isDone; // Revert checkbox on error
-      });
-  }
-
-  function submitUpload(taskId) {
-    const form = document.getElementById(`upload-form-${taskId}`);
-    const formData = new FormData(form);
-
-    fetch(`/upload_task_file/${taskId}/`, {
-      method: "POST",
-      body: formData,
-      headers: {
-        "X-CSRFToken": getCookie("csrftoken"),
-      },
-    })
-      .then((response) => {
-        if (response.ok) {
-          return response.json();
-        } else {
-          throw new Error("Failed to upload file.");
+      
+        // Helper function to retrieve CSRF token from cookies
+        function getCookie(name) {
+          let cookieValue = null;
+          if (document.cookie && document.cookie !== "") {
+            const cookies = document.cookie.split(";");
+            for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.startsWith(name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+              }
+            }
+          }
+          return cookieValue;
         }
-      })
-      .then((data) => {
-        console.log("File uploaded successfully:", data);
-        alert("File uploaded successfully!");
-      })
-      .catch((error) => {
-        console.error("Error uploading file:", error);
-      });
-  }
-
-  // Helper function to retrieve CSRF token from cookies
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== "") {
-      const cookies = document.cookie.split(";");
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.startsWith(name + "=")) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-</script>
-
+      </script>
 </body>
 </html>

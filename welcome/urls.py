@@ -36,8 +36,11 @@ urlpatterns = [
     path('task/<int:task_id>/', views.task_detail, name='task_detail'),
 
     path('task/<int:task_id>/reassign/', views.reassign_task, name='reassign_task'),
-
+    path('pay/', views.pay, name='pay'),
+    path('payment_result/', views.payment_result, name='payment_result'),
     # Authentication URLs
     path('register/', views.register_view, name='register'),
     path('login/', views.login_view, name='login'),
+     path('logout/',views.user_logout, name='logout'),
+
 ] +static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

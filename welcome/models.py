@@ -19,8 +19,8 @@ class CustomUser(AbstractUser):
         choices=[('programming', 'Programming'), ('education', 'Education'), ('crm', 'CRM')],
         null=True
     )
-    pro_subscription_date = models.DateField(null=True, blank=True)  # Track last subscription to Pro
-    subscription_end_date = models.DateField(null=True, blank=True)  # New field
+    pro_subscription_date = models.DateField(null=True, blank=True)
+    subscription_end_date = models.DateField(null=True, blank=True)
     groups = models.ManyToManyField(
         Group,
         related_name="custom_user_groups",
@@ -32,6 +32,10 @@ class CustomUser(AbstractUser):
         blank=True
     )
 
+class MemberProfile(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="profile")
+    job_description = models.TextField()
+    role = models.TextField()
 # Model for unlogged user tasks
 class UnloggedUserTask(models.Model):
     ip_address = models.GenericIPAddressField()
@@ -98,6 +102,10 @@ class TaskFeedback(models.Model):
 
 # Model for invitations
 class Invitation(models.Model):
+    ROLE_CHOICES = [
+        ('team_member', 'Team Member'),
+        ('product_owner', 'Product Owner'),
+    ]
     team_leader = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='sent_invitations')
     name = models.CharField(max_length=255)
     email = models.EmailField()
@@ -105,9 +113,11 @@ class Invitation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     accepted = models.BooleanField(default=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='invitations')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='team_member')  # Add this field
 
     def __str__(self):
-        return f"Invitation to {self.email} for {self.project}"
+        return f"Invitation to {self.email} for {self.project} as {self.role}"
+
 
 
 class SubscriptionOrder(models.Model):
@@ -121,3 +131,11 @@ class SubscriptionOrder(models.Model):
     payment_url = models.URLField(blank=True, null=True)
     amount_cents = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Business(models.Model):
+    name = models.CharField(max_length=255)
+    icon = models.ImageField(upload_to='uploaded_icons/')
+    employee_file = models.FileField(upload_to='employee_files/')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='businesses')
+    members = models.ManyToManyField(CustomUser, related_name='member_of_businesses')

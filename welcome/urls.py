@@ -41,6 +41,11 @@ urlpatterns = [
     # Authentication URLs
     path('register/', views.register_view, name='register'),
     path('login/', views.login_view, name='login'),
-     path('logout/',views.user_logout, name='logout'),
+    path('process_excel/', views.process_excel, name='process_excel'),
+    path('get_progress/', views.get_progress, name='get_progress'),
+    path('loading/', views.loading_page, name='loading_page'),  # Add the loading page URL
+    path('logout/', views.logout_view, name='logout'),  # Add the logout URL
+    path('add-business/', views.add_business, name='add_business'),
+    path('business/<int:business_id>/members/', views.business_members_view, name='business_members'),
 
 ] +static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -130,8 +130,8 @@
         <nav class="navbar-default navbar-side" role="navigation">
             <div class="sidebar-collapse">
                 <ul class="nav" id="main-menu">
-                    <li class="text-center">
-                        <img src="../static/img/netfull.png" class="user-image img-responsive"/>
+                  <li class="text-center">
+                    <img src="{% static 'img/netfull.png' %}" class="user-image img-responsive"/>
 					</li>
 				
                     <li>
@@ -272,6 +272,7 @@
             {% endif %}
             {% endfor %}
             </div>
+            <a class="btn btn-success" href="/export_project_files/{{project.id}}">Export Project</a>
         </div>
     </div>
 <!-- footer -->

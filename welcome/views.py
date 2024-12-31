@@ -1,9 +1,9 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
-from .models import UnloggedUserTask, LoggedUserTask, ProUserTask, Project, TaskFeedback, Invitation,CustomUser,SubscriptionOrder
+from .models import UnloggedUserTask, LoggedUserTask, ProUserTask, Project, TaskFeedback, Invitation,CustomUser,SubscriptionOrder,Business
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
-from django.contrib.auth import login, authenticate,logout
+from django.contrib.auth import login, authenticate ,logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.decorators import login_required
 from .forms import CustomUserCreationForm,ProjectForm
@@ -17,25 +17,34 @@ from django.utils.timezone import now
 from django.contrib import messages
 import requests
 from django.http import HttpResponseRedirect
-
-
-
-def user_logout(request):
-    logout(request)
-    return redirect('login')
+from django.core.files.storage import FileSystemStorage
 
 # Function to handle user registration
 def register_view(request):
     if request.method == 'POST':
-        form = CustomUserCreationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect('dashboard')
-    else:
-        form = CustomUserCreationForm()
-    return render(request, 'register.html', {'form': form})
+        username = request.POST['username']
+        email = request.POST['email']
+        password1 = request.POST['password']
+        password2 = request.POST['confirm_password']
+        
+        if password1 != password2:
+            messages.error(request, "Passwords do not match!")
+            return redirect('register')
+        
+        if CustomUser.objects.filter(username=username).exists():
+            messages.error(request, "Username already exists!")
+            return redirect('register')
+        
+        if CustomUser.objects.filter(email=email).exists():
+            messages.error(request, "Email is already registered!")
+            return redirect('register')
+        
+        user = CustomUser.objects.create_user(username=username, email=email, password=password1)
+        user.save()
 
+    return render(request, 'register.html')
+
+    return render(request, 'register.html', {'form': form})
 # Function to handle user login
 def login_view(request):
     if request.method == 'POST':
@@ -50,6 +59,11 @@ def login_view(request):
     else:
         form = AuthenticationForm()
     return render(request, 'login.html', {'form': form})
+
+def logout_view(request):
+    logout(request)  # Log out the user
+    return redirect('login')  # Redirect to the login page after logout
+
 # Function to create a task for unlogged users
 def create_task(request):
     if request.method == 'POST':
@@ -138,7 +152,6 @@ def send_invitation(request):
     projects = Project.objects.filter(created_by=request.user)
     return render(request, 'send_invitation.html', {'projects': projects})
 
-# Function to display the dashboard
 def dashboard_view(request):
     user = request.user
     context = {}
@@ -146,13 +159,22 @@ def dashboard_view(request):
     if user.is_authenticated:
         if user.subscription_type == 'pro':
             tasks = ProUserTask.objects.filter(user=user).order_by('-created_at')
-        else:
-            user_tasks = list(LoggedUserTask.objects.filter(user=user).order_by('-created_at'))
-            assigned_tasks = list(ProUserTask.objects.filter(assigned_to=user).order_by('-created_at'))
-            tasks = sorted(user_tasks + assigned_tasks, key=lambda t: t.created_at, reverse=True)
+            user_businesses = Business.objects.filter(user=request.user)
+            business_name = user_businesses.first().name if user_businesses.exists() else "No Business"
+            user_business_image = user_businesses.first().icon.url if user_businesses.exists() and user_businesses.first().icon else None
 
-        # Calculate completed tasks count before slicing
-        completed_task_count = tasks.filter(is_done=True).count()
+        else:
+            user_tasks = LoggedUserTask.objects.filter(user=user).order_by('-created_at')
+            assigned_tasks = ProUserTask.objects.filter(assigned_to=user).order_by('-created_at')
+            # Combine and sort the querysets
+            tasks = sorted(
+                list(user_tasks) + list(assigned_tasks),
+                key=lambda t: t.created_at,
+                reverse=True
+            )
+
+        # Calculate completed tasks count
+        completed_task_count = sum(1 for task in tasks if task.is_done)  # Manual filtering for lists
 
         # Slice the tasks list to get the first 5
         tasks = tasks[:5]
@@ -162,6 +184,8 @@ def dashboard_view(request):
         context['completed_task_count'] = completed_task_count  # Add completed task count here
         context['is_pro_user'] = user.subscription_type == 'pro'
         context['user'] = user
+        context['business_name'] = business_name
+        context['user_business_image'] = user_business_image
 
         return render(request, 'index.html', context)
 
@@ -169,7 +193,7 @@ def dashboard_view(request):
         ip_address = get_client_ip(request)
         tasks = UnloggedUserTask.objects.filter(ip_address=ip_address).order_by('-created_at')
 
-        # Calculate completed tasks count before slicing
+        # Calculate completed tasks count
         completed_task_count = tasks.filter(is_done=True).count()
 
         # Slice the tasks list to get the first 5
@@ -180,7 +204,6 @@ def dashboard_view(request):
         context['completed_task_count'] = completed_task_count  # Add completed task count here
 
         return render(request, 'index.html', context)
-
 
 @login_required
 def user_projects_view(request):
@@ -297,10 +320,12 @@ def trial_middleware(get_response):
 @login_required
 def subscribe_pro(request):
     user = request.user
-
+    if user.subscription_type == 'pro':
+        # Render a Pro-specific page
+        return render(request, 'already_pro.html', {'user': user})
+    
     if request.method == 'POST':
         if user.subscription_type == 'free':
-            # Check if the free Pro trial is eligible
             if not user.pro_subscription_date or (now().date() - user.pro_subscription_date).days > 30:
                 # Start a free Pro trial
                 user.subscription_type = 'pro'
@@ -310,15 +335,9 @@ def subscribe_pro(request):
                 messages.success(request, "Enjoy your free Pro trial!")
                 return redirect('dashboard')
             else:
-                # Free trial has ended, redirect to payment
-                messages.error(request, "Your free trial has ended. Please subscribe to continue using Pro features.")
-                return redirect('pay')
-
-        elif user.subscription_type == 'pro':
-            # User is already subscribed to Pro
-            messages.info(request, "You are already subscribed to Pro.")
-            return redirect('dashboard')
-
+                # Redirect to payment page
+                messages.error(request, "You have already used your free trial. Please subscribe to Pro.")
+                return redirect('payment_page')  # Replace with your payment page URL or view name
     return render(request, 'subscribe_pro.html')
 
 
@@ -389,18 +408,26 @@ def accept_invitation(request, token):
     # Retrieve the invitation
     invitation = get_object_or_404(Invitation, token=token, accepted=False)
 
-
-    project = invitation.project
-    request.user.role == 'Product Owner'
     # Add the logged-in user to the project's members
-    project.members.add(request.user)
-    
+    project = invitation.project
+    if request.user not in project.members.all():  # Avoid duplicate additions
+        project.members.add(request.user)
+    else:
+        messages.warning(request, "You are already a member of this project.")
+
+    # Check the role specified in the invitation
+    if invitation.role == 'product_owner':
+        # Assign "Product Owner" permissions (if applicable) or simply acknowledge
+        messages.success(request, "You have joined the project as the Product Owner.")
+    elif invitation.role == 'team_member':
+        # Acknowledge the user as a team member
+        messages.success(request, "You have joined the project as a Team Member.")
+
     # Mark the invitation as accepted
     invitation.accepted = True
     invitation.save()
 
-    return render(request, 'invitation_accepted.html', {'project': invitation.project})
-
+    return render(request, 'invitation_accepted.html', {'project': project})
 
 
 @login_required
@@ -594,15 +621,13 @@ def task_detail(request, task_id):
         'feedback': feedback
     })
 
-
-import requests
+from .models import SubscriptionOrder
 import uuid
-from datetime import timedelta
-from django.shortcuts import redirect
+import requests
 from django.contrib import messages
+from django.shortcuts import redirect
 from django.conf import settings
-from django.utils import timezone
-from .models import SubscriptionOrder  # Replace with actual model import
+from .models import SubscriptionOrder
 
 def pay(request):
     # Step 1: Set and Validate the Amount
@@ -733,3 +758,268 @@ def payment_result(request):
         messages.error(request, f'Error processing payment result: {e}')
 
     return redirect('dashboard')
+
+def payment_result(request):
+    # Handle payment result callback
+    payment_data = request.POST
+    payment_key = payment_data.get('payment_token')
+    payment_status = payment_data.get('success', False)
+
+    try:
+        subscription_order = SubscriptionOrder.objects.filter(payment_key=payment_key).first()
+        if not subscription_order:
+            messages.error(request, 'Payment not found.')
+            return redirect('dashboard')
+
+        if payment_status == 'true':  # Check if the payment was successful
+            subscription_order.payment_status = 'Completed'
+            subscription_order.save()
+
+            # Update user subscription and set the 'Pro' subscription type
+            user = subscription_order.user
+            user.subscription_type = 'pro'
+            user.pro_subscription_date = timezone.now().date()
+            # Assuming 30 days for the subscription duration
+            user.subscription_end_date = user.pro_subscription_date + timedelta(days=30)
+            user.save()
+
+            messages.success(request, 'Payment successful! You are now a Pro member.')
+        else:
+            subscription_order.payment_status = 'Failed'
+            subscription_order.save()
+            messages.error(request, 'Payment failed. Please try again.')
+    except Exception as e:
+        messages.error(request, f'An error occurred while updating payment status: {e}')
+
+    return redirect('dashboard')
+
+
+
+
+from django.core.cache import cache
+from threading import Thread
+import time
+import pandas as pd
+import string
+import random
+from .models import CustomUser, MemberProfile
+from django.core.mail import EmailMultiAlternatives
+from django.conf import settings
+import os
+from pathlib import Path
+
+def process_excel(request):
+    # Construct the full file path
+    file_path = os.path.join(settings.MEDIA_ROOT, 'MOCK_DATA.xlsx')
+    file_path = Path(file_path)
+
+    # Log the resolved file path for debugging
+    print(f"Resolved file path: {file_path}")
+
+    # Check if the file exists at the resolved path
+    if not file_path.exists():
+        return JsonResponse({'error': f"The file at '{file_path}' does not exist."}, status=404)
+
+    # Set initial progress in cache
+    cache.set('progress', 0)
+
+    # Start the background task to process the Excel file
+    thread = Thread(target=create_accounts_from_excel, args=(file_path,))
+    thread.start()
+
+    # Render the loading page
+    return render(request, 'loading_page.html')
+
+def create_accounts_from_excel(file_path):
+    # Define a mapping of possible column names to the expected database fields
+    column_mapping = {
+        'Full Name': 'Name',
+        'Employee Name': 'Name',
+        'Employee Names': 'Name',
+        'Name': 'Name',
+        'Email Address': 'Email',
+        'Email': 'Email',
+        'Emails': 'Email',
+        'Role Type': 'Role',
+        'User Role': 'Role',
+        'Role': 'Role',
+        'Job Title': 'Job Description',
+        'Job Description': 'Job Description',
+        'Description': 'Job Description',
+    }
+
+    try:
+        data = pd.read_excel(file_path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Excel file not found at: {file_path}")
+
+    # Standardize column names
+    standardized_columns = {
+        original: column_mapping.get(original, original) for original in data.columns
+    }
+    data.rename(columns=standardized_columns, inplace=True)
+
+    # Validate that all required columns are present
+    required_columns = ['Name', 'Email', 'Job Description', 'Role']
+    missing_columns = [col for col in required_columns if col not in data.columns]
+    if missing_columns:
+        raise ValueError(f"The following required columns are missing after standardization: {missing_columns}")
+
+    total_rows = len(data)
+    members_data = []  # Initialize the list to store member data
+
+    for index, row in data.iterrows():
+        # Update progress in cache
+        progress = int((index / total_rows) * 100)
+        cache.set('progress', progress)
+        time.sleep(0.1)  # Simulate processing time
+
+        name = row['Name']
+        email = row['Email']
+        job_description = row['Job Description']
+        role = row['Role']
+
+        password_length = 12
+        characters = string.ascii_letters + string.digits + string.punctuation
+        password = ''.join(random.choice(characters) for _ in range(password_length))
+
+        user, created = CustomUser.objects.get_or_create(
+            username=email,
+            email=email,
+            defaults={'first_name': name.split()[0], 'last_name': ' '.join(name.split()[1:])}
+        )
+
+        if created:
+            user.set_password(password)
+            user.save()
+            send_user_credentials_email(email, password, name)  # Send email with credentials
+
+        MemberProfile.objects.update_or_create(
+            user=user,
+            defaults={'job_description': job_description, 'role': role}
+        )
+
+        # Append member data to members_data list
+        members_data.append({'Email': email, 'Password': password})
+
+    # Create Excel file after processing
+    if members_data:
+        create_members_excel(members_data)
+
+    # After processing, ensure progress is 100%
+    cache.set('progress', 100)
+
+
+def create_members_excel(members_data):
+    # Create Excel file with member data
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.append(['Email', 'Password'])  # Add header row
+
+    for member in members_data:
+        ws.append([member['Email'], member['Password']])
+
+    wb.save(os.path.join(settings.MEDIA_ROOT, 'created_members.xlsx'))
+
+
+def get_progress(request):
+    # Return current progress from cache
+    progress = cache.get('progress', 0)
+    return JsonResponse({'progress': progress})
+
+def loading_page(request):
+    return render(request, 'loading_page.html')  # Ensure this is the loading page template
+
+def send_user_credentials_email(email, password, name):
+    """Sends email with credentials (USE WITH EXTREME CAUTION)."""
+
+    subject = "Your New Account Credentials"
+    text_content = f"""
+    Dear {name},
+
+    Your account has been created with the following credentials:
+
+    Email: {email}
+    Password: {password}
+
+    We *strongly* recommend changing your password immediately after your first login.
+
+    Sincerely,
+    The Team
+    """
+
+    html_content = f"""
+    <p>Dear {name},</p>
+    <p>Your account has been created with the following credentials:</p>
+    <ul>
+        <li>Email: {email}</li>
+        <li>Password: {password}</li>
+    </ul>
+    <p>We <strong>strongly</strong> recommend changing your password immediately after your first login.</p>
+    <p>Sincerely,<br>The Team</p>
+    """
+
+    msg = EmailMultiAlternatives(subject, text_content, settings.DEFAULT_FROM_EMAIL, [email])
+    msg.attach_alternative(html_content, "text/html")
+    try:
+        msg.send()
+    except Exception as e:
+        print(f"Error sending email to {email}: {e}")
+
+
+@login_required
+def add_business(request):
+    if request.method == 'POST':
+        company_name = request.POST.get('company_name')
+        icon = request.FILES['icon']
+        employee_file = request.FILES['employee_file']
+
+        # Save the icon to the 'uploaded_icons' directory
+        icon_fs = FileSystemStorage(location='media/uploaded_icons')
+        icon_name = icon_fs.save(icon.name, icon)
+
+        # Save the employee file to the 'uploaded_excel' directory
+        excel_fs = FileSystemStorage(location='media/uploaded_excel')
+        employee_file_name = excel_fs.save(employee_file.name, employee_file)
+
+        # Create a new Business instance
+        Business.objects.create(
+            name=company_name,
+            icon=f'uploaded_icons/{icon_name}',
+            employee_file=f'uploaded_excel/{employee_file_name}',
+            user=request.user
+        )
+
+        return redirect('dashboard')
+
+    return render(request, 'add_business.html')
+
+
+def business_members_view(request, business_id):
+    """
+    View to render members of a specific business.
+    """
+    business = get_object_or_404(Business, id=business_id)
+    members = business.members.all()
+
+    # Collect member details
+    member_details = []
+    for member in members:
+        profile = getattr(member, 'profile', None)
+        member_details.append({
+            'name': f"{member.first_name} {member.last_name}",
+            'email': member.email,
+            'password': member.password,  # Encrypted, use for reference only
+            'role': profile.role if profile else 'No role assigned'
+        })
+
+    context = {
+        'business': business,
+        'users': member_details
+    }
+    return render(request, 'member_detail.html', context)
+
+
+
+
